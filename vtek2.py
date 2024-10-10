@@ -12,13 +12,13 @@ def main():
     Ns = [];
     Tsqs = [];
     STsqs = [];
-    H = float(input('Введите H и погрешность H'))
+    H = float(input('Введите H и погрешность H: '))
     H_err = float(input())
-    m0 = float(input('Введите m0 (количество измерений) '))
-    n = float(input('Введите n (количество колебаний на 1 измерение) '))
+    m0 = int(input('Введите m0 (количество измерений): '))
+    n = float(input('Введите n (количество колебаний на 1 измерение): '))
 
     print('\n', '-' * 35, "\nОБРАБОТКА С РУЧНЫМИ ЧАСАМИ\n", '-' * 35);
-    for i in range(10):
+    for i in range(m0 + 1):
         print("введите t_1, t_2, t_3 для N  = ", i);
         list = [float(input()) for _ in range(3)];
         mean = avg(list);
@@ -43,10 +43,11 @@ def main():
 
 
     print('\n', '-' * 35, "\nОБРАБОТКА С ФОТОДАТЧИКАМИ\n", '-' * 35);
-    for i in range(10):
+    for i in range(m0 + 1):
         print("Введите t, St для N = ", i);
         mean = float(input())
-        dev = 0.0001 #  НАГЛО ПОДОГНАТЬ!!!
+        dev = float(input())
+        print(mean, dev)
         mean_err = sqrt(dev * dev + pow(1e-3 * mean, 2));
         T = 2 * mean;
         T_err = 2 * mean_err;
@@ -72,8 +73,7 @@ def main():
     U_errs[0] -= 0.0015;
     for U, U_err in zip(Us, U_errs):
         tg = float(input('Введите t_д: '));
-        # tg_err = float(input('Введите погрешность t_д'));
-        tg_err = 0.0001
+        tg_err = float(input('Введите погрешность t_д'));
         omega = 2*PI / tg;
         omega_err = omega * tg_err / tg;
         omegas.append((U, omega, U_err, omega_err));

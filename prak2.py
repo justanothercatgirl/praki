@@ -14,7 +14,7 @@ def avg(l):
 def stddev(l):
     s = len(l)
     a = avg(l)
-    return math.sqrt(sum(( (i - a)**2 for i in l )) / s / (s-1))
+    return math.sqrt(sum(( (i - a)**2 for i in l )) / (s * (s-1)))
 
 def sigsum(stddev, sig_sist):
     return math.sqrt(stddev**2 + sig_sist**2)
