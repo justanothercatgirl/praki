@@ -32,17 +32,15 @@ def task1():
         a = a_i(L[0], d)
         T = t/n
         data.append([d, t, a, T, T*T*a, a*a, sigma(a_i_sq, [L[0], d], [L[1], 0.001])])
-    print("%-16s" * 7 % ("d(mm)", "t(c)", "a(mm)", "T(c)", "x=T^2 (c^2*mm)", "y=a^2 (mm^2)", "S_y (mm^2)"))
+    print("%-16s" * 7 % ("d(cm)", "t(c)", "a(cm)", "T(c)", "x=T^2 (m*c^2)", "y=a^2 (m^2)", "S_y (cm^2) * 10^-3"))
     for i in data:
         l = i.copy()
-        l[I_D] *= 1000 # d
-        l[I_A] *= 1000 # a
-        l[I_X] *= 1000 # T^2 * a
-        l[I_Y] *= 1000000 # a^2
-        l[I_SY] *= 1000000 # S_{a^2}
+        l[I_D] *= 100 # d
+        l[I_A] *= 100 # a
+        l[I_SY] *= 1000 # S_{a^2}
         print("%-16.4f"  * 7 % tuple(l))
     with open("output_117_T_a.data", "w") as file:
-        for a, b in zip([i[I_T] for i in data], [i[I_A] for i in data]):
+        for a, b in zip([i[I_A] for i in data], [i[I_T] for i in data]):
             file.write(f"{a} {b}\n")
     X = np.array([i[I_X] for i in data])
     Y = np.array([i[I_Y] for i in data])
@@ -75,18 +73,37 @@ def g(l, T): return 4 * PI * PI * l / T / T
 
 def task2():
     n = 10
-    print('-' * 15, "УПРАЖНЕНИЕ 1", '-' * 15)
-    print("Так, ну поделить на 10 вручную легче, чем вводить это в комп а потом переписывать")
-    print("так что периоды посчитаете сами")
-    print("Введите t_01 и t_02 на одной строке через пробел")
-    T0 = avg(list(map(lambda x: float(x)/n, input().split())))
-    T_sigma = float(input("Введите погрешность одного измерения периода (sigma_суб.):\n"))
+    print('-' * 15, "УПРАЖНЕНИЕ 2", '-' * 15)
+    T_sigma = float(input("Введите погрешность одного измерения периода (sigma_суб.):\n")) / sqrt(6)
+    print("Так же, как в упражнении 1 вводите 'x, t_прямой, t_обратный' ")
+    print("чтобы посчитать среднее, пишите 'x, t1 t2 t3, t4 t5 t6' ")
+    print("в отличие от упражнения один, разделять запятыми обязательно")
+    xs = []; t_dir = []; t_rev = []; terr_dir = []; terr_rev = [];
+    while (inp := input()) != 'q':
+        inps = inp.split(',')
+        xs.append(float(inps[0]))
+        t_dir.append(avg(list(map(float, inps[1].split()))) / 10)
+        terr_dir.append(T_sigma / 10 / sqrt(len(inps[1].split())))
+        t_rev.append(avg(list(map(float, inps[2].split()))) / 10)
+        terr_rev.append(T_sigma / 10 / sqrt(len(inps[2].split())))
+    smallind = 0
+    smalldif = 0x7FFFFFFF
+    for i, (d, r) in enumerate(zip(t_dir, t_rev)):
+        if abs((r-d)) < smalldif:
+            smalldif = abs(d-r)
+            smallind = i
+    T0 = avg((t_dir[smallind], t_rev[smallind]))
     print("Введите L_пр и погрешность на одной строке (м)")
     l_pr = [*map(float, input().split())]
+    T_s = sqrt(terr_rev[smallind]**2 / 2 + terr_dir[smallind]**2 / 2)
     args = [l_pr[0], T0]
-    sigmas = [l_pr[1], T_sigma / sqrt(2) / sqrt(3)] # корни от 2 расчётов среднего
+    sigmas = [l_pr[1], T_s]
     g_ = (g(*args), sigma(g, args, sigmas))
-    print(f"T0 = {T0}±{sigmas[1]}\ng = {g_[0]}±{g_[1]}")
+    with open("output_117_T1.data", "w") as f1, open("output_117_T2.data", "w") as f2:
+        for x, t1, t2, e1, e2 in zip(xs, t_dir, t_rev, terr_dir, terr_rev):
+            f1.write(f"{x} {t1} {e1}\n")
+            f2.write(f"{x} {t2} {e2}\n")
+    print(f"T0[x={xs[smallind]}] = {T0}±{sigmas[1]}\ng = {g_[0]}±{g_[1]}")
 
 if __name__ == '__main__':
     task1()
