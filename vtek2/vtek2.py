@@ -1,6 +1,4 @@
-#!/home/main/coding/py/venv/bin/python3
-
-from prak2 import *
+from praklib import *
 from math import pow, sqrt 
 
 
