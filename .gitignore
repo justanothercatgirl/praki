@@ -3,3 +3,5 @@ venv/
 __pycache__/
 *.png
 *.log
+*.out
+vtek3/*.data
