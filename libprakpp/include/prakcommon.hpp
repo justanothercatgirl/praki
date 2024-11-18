@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include <functional>
 #include <vector>
 #include <iostream>
 
@@ -24,7 +25,10 @@
 	#define SUBSCR_CLS )
 	#define SUBSCR_OPRTR operator()
 #endif
-	
+
+template <typename T>
+using function_t = std::function<T(const std::vector<T> &)>;
+
 namespace prak {
 
 /// stolen from [cppreference.com](https://en.cppreference.com/w/cpp/types/numeric_limits/epsilon)

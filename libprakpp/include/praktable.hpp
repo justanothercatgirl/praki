@@ -58,7 +58,7 @@ template <typename dtype>
 class table {
 	std::vector<dtype> data;
 
-	using function_type = std::function<dtype(const std::vector<dtype> &)>;
+	using function_type = function_t<dtype>;
 	using stringvec = std::vector<std::string>;
 
 	size_t index(const std::string &str) const {
@@ -67,7 +67,7 @@ class table {
 
 	FILE* open_gnuplot() {
 #if defined(_POSIX_VERSION) || defined(__unix)
-		FILE*  = popen("gnuplot", "w");
+		return popen("gnuplot", "w");
 #else
 #warning Not implemented for non-unix operating systems
 		return NULL;
@@ -103,7 +103,7 @@ public:
 	/// Mandatory columnnames: names of columns
 	std::vector<std::string> names;
 	/// width used for printing, defaults to 8
-	size_t column_width = 8;
+	size_t column_width = 12;
 
 	/// default constructor
 	table() = default;

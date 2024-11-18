@@ -37,14 +37,6 @@ RT err_MS8040(const std::vector<RT> &args) {
 	return 0.0005 * args[0] + 6 * args[1];
 }
 
-RT S(const std::vector<RT> &args) {
-	return prak::PI * args[0]*args[0]/4;
-}
-
-RT S_1(const std::vector<RT> &args) {
-	return 1 / S(args);
-}
-
 // args: I
 // output: DI
 RT D_M830B(const std::vector<RT> &args) {
@@ -61,7 +53,7 @@ RT err_M380B(const std::vector<RT> &args) {
 	return 0.01 * args[0] + 2 * args[1];
 }
 
-void ex1(void) {
+void excercise1(void) {
 	std::unordered_map<struct wire, prak::table<RT>> map {
 		{{0.5, 0.00015}, prak::table<RT>{}},
 		{{0.5, 0.00025}, prak::table<RT>{}},
@@ -85,7 +77,6 @@ void ex1(void) {
 		table.apply(D_MS8040, {"U"}, "DU")
 		     .apply(err_MS8040, {"U", "DU"}, "sU")
 		     .apply(D_M830B, {"I"}, "DI")
-		     .apply(D_M830B, {"I"}, "DI")
 		     .apply(err_M380B, {"I", "DI"}, "sI");
 		std::cout << index << ":\n" << table << std::endl;
 		if (prak::fequal<RT>(index.length, 0.5))	resist_d.add_row({index.diam, NAN, NAN, NAN, NAN});
@@ -95,33 +86,75 @@ void ex1(void) {
 	for (size_t i = 0; i < resist_d.rows; ++i) {
 		prak::table<RT> &cur = map.at({.length = 0.5, .diam = resist_d["d", i]});
 		auto [a, b] = cur.least_squares_linear("U", "I", "sI");
-		std::cout << "diam = " << resist_d["d", i] 
-			  << ": A = " << a
-			  << "; B = " << b
-			  << "; R = " << 1/a.val << std::endl;
 		resist_d["R", i] = 1/a.val;
 		resist_d["sR", i] = a.err/a.val/a.val;
-		resist_d.apply(S_1, {"d"}, "1/S");
 		std::ofstream outf("plot_" + std::to_string(0.5f) + "_" + std::to_string(resist_d["d", i]) + ".data");
 		cur.write_plot("U", "I", "sI", outf);
 	}
+
+	std::ofstream rsplot("plot_r_1s.data");
+	resist_d
+		.apply([](const std::vector<RT> &args) -> RT {
+			return prak::PI * args[0]*args[0]/4;
+		}, {"d"}, "S")
+		.apply([](const std::vector<RT> &args) -> RT {
+			return 1 / (prak::PI * args[0]*args[0]/4);
+		}, {"d"}, "1/S")
+		.write_plot("1/S", "R", "sR", rsplot);
+	
 	auto [rho, _] = resist_d.least_squares_linear("1/S", "R", "sR");
 	rho.val /= 0.5; 
 	rho.err /= 0.5;
 	std::cout << "Rho = " << rho << " (error = " << _ << ")" << std::endl;
-	
+
 	// LLS for d=const 
-	resist_d.apply(S, {"d"}, "S")
-		.apply(S_1, {"d"}, "1/S");
-	std::cout << resist_d;
+	for (size_t i = 0; i < resist_L.rows; ++i) {
+		prak::table<RT> &cur = map.at({.length = resist_L["L", i], .diam = 0.00015});
+		auto [a, b] = cur.least_squares_linear("U", "I", "sI");
+		resist_L["R", i] = 1/a.val;
+		resist_L["sR", i] = a.err/a.val/a.val;
+	}
+	RT _d = 0.00015;
+	auto rho_f = [](const std::vector<RT> &args) -> RT {
+			return args[1] * prak::PI * args[2] * args[2] / args[0] / 4;
+		};
+	resist_L
+		.apply([_d, &rho_f](const std::vector<RT> &args) {
+			return rho_f({args[0], args[1], _d});
+		}, {"L", "R"}, "Rho")
+		.apply([_d, &rho_f](const std::vector<RT> &args) -> RT {
+			return prak::sigma<RT>(rho_f, {args[0], args[1], _d}, {0, args[2], 0});
+		}, {"L", "R", "sR"}, "sRho");
+	
+	// output
+	std::cout << resist_d << resist_L;
 	
 }
 
-void ex3(void) {
-
+void excercise3(void) {
+	prak::table<RT> red, green; 
+	{
+		std::ifstream red_stream("data_red"), green_stream("data_green");
+		red.read(red_stream);
+		green.read(green_stream);
+	}
+	green	.apply(D_MS8040,	{"U"}, 		"DU")
+		.apply(err_MS8040,	{"U", "DU"}, 	"sU")
+		.apply(D_M830B,		{"I"}, 		"DI")
+		.apply(D_M830B,		{"I", "DI"}, 	"sI");
+	red	.apply(D_MS8040,	{"U"},		"DU")
+		.apply(err_MS8040,	{"U", "DU"}, 	"sU")
+		.apply(D_M830B,		{"I"}, 		"DI")
+		.apply(D_M830B,		{"I", "DI"}, 	"sI");
+	{
+		std::ofstream red_out("plot_red.data"), green_out("plot_green.data");
+		red.write_plot("U", "I", "sI", red_out);
+		green.write_plot("U", "I", "sI", green_out);
+	}
+	std::cout << "Red: " << red << "\nGreen: " << green;
 }
 
 int main(int argc, char *argvp[]) {
-	ex1();
-	ex3();
+	excercise1();
+	excercise3();
 }

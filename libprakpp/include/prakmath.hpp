@@ -184,6 +184,36 @@ scalar:
 	return linear + finalize(buf);
 }
 
+// take a derivative of function `f` with arguments `at` and with differentiable variable being at index `varidx`
+template <std::floating_point T>
+T deriv4(function_t<T> f, std::vector<T> /*I actually do want a copy here*/ at, size_t varidx) {
+	T h = 1e-5;
+	T sum = 0;
+
+	at[varidx] += 2*h;
+	sum -= f(at);
+	at[varidx] -= h;
+	sum += 8 * f(at);
+	at[varidx] -= 2*h;
+	sum -= 8*f(at);
+	at[varidx] -= h;
+	sum += f(at);
+
+	return sum / (12*h);
+}
+
+/// get error of the calculated value 
+template <std::floating_point T>
+T sigma(function_t<T> f, const std::vector<T> &args, const std::vector<T> sigmas) noexcept(false) {
+	if (args.size() != sigmas.size()) throw dimension_error("function prak::sigma : Args.size() does not match sigmas.size()");
+	T sum = 0;
+	for (size_t i = 0; i < args.size(); ++i) {
+		T tmp = deriv4(f, args, i) * sigmas[i];
+		sum += tmp*tmp;
+	}
+	return std::sqrt(sum);
+}
+
 /// calculate least-squares linear approximation to fit data
 /// ax+b = y (ss is an error of Y value)
 template <std::floating_point T>
