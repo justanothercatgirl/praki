@@ -4,7 +4,7 @@ CXXFLAGS += -ggdb
 
 run: main 
 	./main
-	gnuplot plots.gp
+	gnuplot -q plots.gp 2> /dev/null 
 
 main: main.cpp
 	$(CXX) -o $@ $^ $(CXXFLAGS)

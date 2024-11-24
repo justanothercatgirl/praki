@@ -90,6 +90,11 @@ template <typename T>
 struct pvalue {	T val, err; };
 
 template <typename T>
+struct pvalue<T> operator*(const struct pvalue<T> &v, T a) {
+	return pvalue<T>{v.val * a, v.err * a};
+}
+
+template <typename T>
 std::ostream &operator<<(std::ostream &os, const struct pvalue<T> &p) {
 	/* return os << "value {" << p.val << "±" << p.err << "}"; */
 	return os << p.val << "±" << p.err;
