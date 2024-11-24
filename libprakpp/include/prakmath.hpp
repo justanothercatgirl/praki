@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <concepts>
+#include <numeric>
 
 #ifdef __x86_64__
 #include <immintrin.h>
@@ -184,6 +185,25 @@ scalar:
 	return linear + finalize(buf);
 }
 
+template <arithmetic T>
+T avg(const std::vector<T> &args) {
+	T init{};
+	for (const T &x : args) {
+		init += x;
+	}
+	return init / args.size();
+}
+
+template <arithmetic T>
+T stddev(const std::vector<T> &args) {
+	T sum = {};
+	const T a = avg<T>(args);
+	for (T el : args) {
+		sum += (a-el)*(a-el);
+	}
+	return std::sqrt(sum/args.size()/(args.size()-1));
+}
+
 // take a derivative of function `f` with arguments `at` and with differentiable variable being at index `varidx`
 template <std::floating_point T>
 T deriv4(function_t<T> f, std::vector<T> /*I actually do want a copy here*/ at, size_t varidx) {
@@ -204,7 +224,7 @@ T deriv4(function_t<T> f, std::vector<T> /*I actually do want a copy here*/ at, 
 
 /// get error of the calculated value 
 template <std::floating_point T>
-T sigma(function_t<T> f, const std::vector<T> &args, const std::vector<T> sigmas) noexcept(false) {
+T sigma(function_t<T> f, const std::vector<T> &args, const std::vector<T> &sigmas) noexcept(false) {
 	if (args.size() != sigmas.size()) throw dimension_error("function prak::sigma : Args.size() does not match sigmas.size()");
 	T sum = 0;
 	for (size_t i = 0; i < args.size(); ++i) {
@@ -277,7 +297,7 @@ void least_squares_linear(
 /// May throw std::bad_optional_access
 template <typename T>
 std::enable_if<std::is_arithmetic_v<T>, std::vector<pvalue<T>>> 
-polynomial_regression(
+polynominal_regression(
 		size_t degree, 
 		std::vector<T> data_x, 
 		std::vector<T> data_y, 

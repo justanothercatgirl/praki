@@ -5,6 +5,25 @@
 #include <vector>
 #include <iostream>
 
+typedef void		i0;
+typedef int8_t		i8;
+typedef uint8_t		u8;
+typedef int16_t		i16;
+typedef uint16_t	u16;
+typedef int32_t		i32;
+typedef uint32_t	u32;
+typedef int64_t		i64;
+typedef uint64_t	u64;
+typedef ssize_t		isz;
+typedef size_t		usz;
+typedef float		f32;
+typedef double		f64;
+#if __SIZEOF_LONG_DOUBLE__ == 16
+typedef long double	f128;
+#else
+typedef long double	_f64;
+#endif
+
 #if defined(_MSC_VER) || !defined(__cpp_multidimensional_subscript) || __cplusplus < 202110L
 #warning "can not use multidimentional subscript operator: falling back to `operator()`"
 #undef MDSUBSCRIPT
