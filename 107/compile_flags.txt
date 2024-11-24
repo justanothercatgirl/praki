@@ -1,0 +1,4 @@
+-Iinclude
+-std=c++2c
+-mavx2
+

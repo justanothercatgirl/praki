@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include <cstddef>
 #include <functional>
 #include <algorithm>
@@ -96,7 +97,7 @@ public:
 		iterator operator++(int) { iterator ret = *this; ++(*this); return ret; }
 		bool operator==(iterator other) { return data_index == other.data_index && parent == other.parent && col_index == other.col_index; }
 		bool operator!=(iterator other) { return data_index != other.data_index || parent != other.parent || col_index != other.col_index; }
-		value_type operator*() { return parent->data[data_index]; };
+		value_type &operator*() { return parent->data[data_index]; };
 	};
 	/// Optional rownames: names of rows
 	std::vector<std::string> opt_rownames;
@@ -108,16 +109,23 @@ public:
 	/// default constructor
 	table() = default;
 
-	/// Data: array of ararys, not freed automatically.
-	explicit table(const std::vector<std::string> &strings, dtype **data, size_t rows /*size_t columns = strings.size()*/)
-		: rows{rows}, columns{strings.size()} 
+	explicit table(const std::vector<std::string> &columns, size_t rows, const dtype &deflt) 
+		: rows{rows}, columns{columns.size()} 
 	{
-		names = strings;
+		names = columns;
+		data = std::vector<dtype>(rows * columns.size(), deflt);
+	}
 
-		data = std::vector<dtype>(rows * strings.size());
+	/// Data: array of ararys, not freed automatically.
+	explicit table(const std::vector<std::string> &columns, dtype **data, size_t rows /*size_t columns = strings.size()*/)
+		: rows{rows}, columns{columns.size()} 
+	{
+		names = columns;
+
+		data = std::vector<dtype>(rows * columns.size());
 		for (size_t i = 0; i < rows; ++i)
-			for (size_t j = 0; j < strings.size(); ++j)
-				data[i * strings.size() + j] = data[i][j];
+			for (size_t j = 0; j < columns.size(); ++j)
+				data[i * columns.size() + j] = data[i][j];
 	}
 	
 	/// Strings: names for columns
@@ -137,10 +145,16 @@ public:
 		}
 	}
 
+	explicit table(const std::string &file) {
+		read(file);
+	}
+
 	iterator begin(std::string column) { return iterator(this, column); }
 	iterator end(std::string column) { return iterator(this, column, rows); }
 
-	dtype & SUBSCR_OPRTR (const std::string &column, size_t row) {
+	dtype & SUBSCR_OPRTR (const std::string &column, size_t row) noexcept(false) {
+		size_t i = index(column);
+		if (i == columns) throw std::out_of_range("Column " + column + " does not exist");
 		return data.at(names.size() * row + index(column));
 	}
 
@@ -196,12 +210,14 @@ public:
 				v[j] = SUBSCR_OPRTR(args[j], i);
 			if (result.has_value()) data[columns * i + result_index] = function(v);
 			else (void)function(v);
-		}	
+		}
+		/* print(std::cerr); */
 		return *this;
 	}
 	
 	/// adds a column with name `name` and data `column_data`
 	void add_column(std::string name, std::vector<dtype> column_data) {
+		if (column_data.size() == 0) column_data = std::vector<dtype>(rows, dtype{});
 		std::vector<dtype> data_new(rows * (++columns));
 
 		for (size_t row = 0; row < rows; ++row) {
@@ -215,6 +231,7 @@ public:
 
 	/// Appends a column to the table. if name is set, appends it to `opt_rownames`
 	void add_row(std::vector<dtype> values, std::optional<std::string> name = std::nullopt) {
+		if (values.size() == 0) values = std::vector<dtype>(columns, dtype{});
 		data.resize(columns * (++rows));
 		std::copy_n(values.cbegin(), columns, data.end() - columns);
 		if (name.has_value()) opt_rownames.push_back(*name);
@@ -224,7 +241,7 @@ public:
 		t.print(os);
 		return os;
 	}
-	
+
 	/// Reads a table from a file in a format:
 	/// ```
 	/// col1 col2 col3 ...
@@ -251,7 +268,9 @@ public:
 			names.push_back(buffer);
 		
 		std::vector<dtype> tmp_row(names.size());
+		int __i = 0;
 		while (!(f >> std::ws).eof()) {
+			++__i;
 			if (read_names) { 
 				f >> buffer;
 				opt_rownames.push_back(buffer);
@@ -269,9 +288,25 @@ public:
 		}
 		columns = names.size();
 	}
+	
+	/// Reads a table from a file specified by `path`. 
+	/// For details, refer to documentation of `void read(std::ifstream&)` overload
+	void read(const std::string &path) {
+		std::ifstream f(path);
+		read(f);
+	}
+
+	/// Fills a specified column with the same value `v`
+	void fill_column(const std::string &column, dtype v) {
+		apply([&v](const std::vector<dtype>& _) -> dtype { return v; }, {}, column);
+	}
 
 	/// returns an std::pair with coefficients A and B in that order
-	std::pair<prak::pvalue<dtype>, prak::pvalue<dtype>> least_squares_linear(std::string x, std::string y, std::optional<std::string> sigma = std::nullopt) {
+	std::pair<prak::pvalue<dtype>, prak::pvalue<dtype>> 
+	least_squares_linear(std::string x, std::string y, std::optional<std::string> sigma, std::optional<dtype> sigma_fixed) 
+	noexcept(false) {
+		if (sigma.has_value() == sigma_fixed.has_value()) 
+			throw std::invalid_argument("sigma and sigma_fixed can't both have (no) value");
 		prak::vector<dtype> _x(rows);
 		prak::vector<dtype> _y(rows);
 		prak::vector<dtype> _s(rows);
@@ -279,11 +314,24 @@ public:
 		std::copy(begin(x), end(x), _x.begin());
 		std::copy(begin(y), end(y), _y.begin());
 		if (sigma.has_value()) std::copy(begin(*sigma), end(*sigma), _s.begin());
-		else _s = prak::vector<dtype>(rows, static_cast<dtype>(1));
+		else _s = prak::vector<dtype>(rows, static_cast<dtype>(*sigma_fixed));
 
 		std::pair<prak::pvalue<dtype>, prak::pvalue<dtype>> ret;
 		prak::least_squares_linear<dtype>(_x, _y, _s, ret.first, ret.second);
 		return ret;
+	}
+
+	/// calculate an average of the column 
+	dtype col_avg(const std::string &column) {
+		dtype accum = dtype{};
+		for (auto it = begin(column); it != end(column); ++it) 
+			accum += *it;
+		return accum / rows;
+	}
+
+	/// calculate standard deviation of the column
+	dtype col_stddev(const std::string &column) {
+		assert(0);
 	}
 
 	/// Serialize data in format `data[args[0]][i] data[args[1]][i] data[args[2]][i]...`
@@ -307,10 +355,16 @@ public:
 		if (yss.has_value()) ssi = index(*yss);
 		for (size_t row = 0; row < rows; ++row) {
 			size_t offset = columns * row;
-			out << data[offset + xsi] << ' ' << data[offset + ysi];
+			out << data.at(offset + xsi) << ' ' << data.at(offset + ysi);
 			if (ssi != nosigma) out << ' ' << data[offset+ssi];
 			out << std::endl;
 		}
+	}
+
+	/// Serialize data into a file `file`. For details, refer to documentation for overload with std::ifstream as an argument
+	void write_plot(const std::string &file, const std::string &xs, const std::string &ys, std::optional<std::string> yss = std::nullopt) const {
+		std::ofstream out(file);
+		write_plot(xs, ys, yss, out);
 	}
 	
 	void plot_png(

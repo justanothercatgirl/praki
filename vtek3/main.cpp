@@ -41,9 +41,10 @@ RT err_MS8040(const std::vector<RT> &args) {
 // output: DI
 RT D_M830B(const std::vector<RT> &args) {
 	RT val = args[0];
-	if (val < 0.002) return 1e-6;
-	if (val < 0.020) return 1e-5;
-	if (val < 0.200) return 1e-4;
+	if (val < 0.0002) return 1e-6;
+	if (val < 0.002) return 1e-5;
+	if (val < 0.020) return 1e-4;
+	if (val < 0.200) return 1e-3;
 	return 1e-3;
 }
 

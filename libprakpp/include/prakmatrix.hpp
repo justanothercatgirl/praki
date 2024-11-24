@@ -3,8 +3,8 @@
 #include "prakcommon.hpp"
 
 #include <cstring>
-#include <iomanip>
 #include <ostream>
+#include <optional>
 #include <vector>
 
 namespace prak {
