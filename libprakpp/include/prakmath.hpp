@@ -235,6 +235,18 @@ T sigma(function_t<T> f, const std::vector<T> &args, const std::vector<T> &sigma
 	return std::sqrt(sum);
 }
 
+template <std::floating_point T>
+pvalue<T> function(function_t<T> func, const std::vector<pvalue<T>> &args) {
+	std::vector<T> _args(args.size()),
+			 _sgms(args.size());
+	for (size_t i = 0; const auto & [val, err] : args) {
+		_args[i] = val;
+		_sgms[i++] = err;
+	}
+	pvalue<T> ret = {func(_args), sigma(func, _args, _sgms)};
+	return ret;
+}
+
 /// calculate least-squares linear approximation to fit data
 /// ax+b = y (ss is an error of Y value)
 template <std::floating_point T>
