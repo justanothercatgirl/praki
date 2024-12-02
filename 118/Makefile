@@ -3,10 +3,10 @@ CFLAGS = -std=c++2c -mavx -Iinclude -ggdb
 
 .PHONY: all run_main clean gnuplot 
 
-all: gnuplot
+run: gnuplot
 
-gnuplot:  run_main plots.gp
-	gnuplot plots2.gp
+gnuplot: plots.gp run_main
+	gnuplot $<
 
 run_main: main
 	./main

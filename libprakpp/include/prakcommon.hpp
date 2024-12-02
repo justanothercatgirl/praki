@@ -23,7 +23,6 @@ typedef long double	f128;
 #else
 typedef long double	_f64;
 #endif
-
 #if defined(_MSC_VER) || !defined(__cpp_multidimensional_subscript) || __cplusplus < 202110L
 #warning "can not use multidimentional subscript operator: falling back to `operator()`"
 #undef MDSUBSCRIPT
