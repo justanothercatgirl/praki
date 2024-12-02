@@ -4,4 +4,6 @@ __pycache__/
 *.png
 *.log
 *.out
+*.plot
 vtek3/*.data
+*/main

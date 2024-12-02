@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <concepts>
+#include <iomanip>
 #include <numeric>
 
 #ifdef __x86_64__

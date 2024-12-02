@@ -9,6 +9,7 @@
 #include <fstream>
 #include <iomanip>
 #include <ostream>
+#include <set>
 #include <string>
 #include <vector>
 #include <cmath>
@@ -62,8 +63,10 @@ class table {
 	using function_type = function_t<dtype>;
 	using stringvec = std::vector<std::string>;
 
-	size_t index(const std::string &str) const {
-		return std::distance(names.cbegin(), std::find(names.cbegin(), names.cend(), str));
+	size_t index(const std::string &str) const noexcept(false) {
+		auto ret = std::distance(names.cbegin(), std::find(names.cbegin(), names.cend(), str));
+		if (ret == columns) throw std::out_of_range("Column " + str + " does not exist");
+		return ret;
 	}
 
 	FILE* open_gnuplot() {
@@ -95,6 +98,7 @@ public:
 		}
 		iterator &operator++() { data_index += columns; return *this; }
 		iterator operator++(int) { iterator ret = *this; ++(*this); return ret; }
+		iterator &operator+(int x) { data_index += columns * x; return *this; }
 		bool operator==(iterator other) { return data_index == other.data_index && parent == other.parent && col_index == other.col_index; }
 		bool operator!=(iterator other) { return data_index != other.data_index || parent != other.parent || col_index != other.col_index; }
 		value_type &operator*() { return parent->data[data_index]; };
@@ -154,7 +158,6 @@ public:
 
 	dtype & SUBSCR_OPRTR (const std::string &column, size_t row) noexcept(false) {
 		size_t i = index(column);
-		if (i == columns) throw std::out_of_range("Column " + column + " does not exist");
 		return data.at(names.size() * row + index(column));
 	}
 
@@ -211,12 +214,47 @@ public:
 			if (result.has_value()) data[columns * i + result_index] = function(v);
 			else (void)function(v);
 		}
-		/* print(std::cerr); */
 		return *this;
 	}
-	
+
+	table &apply_n(function_type function, std::vector<iterator> cols, size_t n, std::optional<std::string> result) {
+		size_t result_index = result.has_value() ? index(*result) : 0;
+		for (size_t i = 0; i < n; ++i) {
+			std::vector<dtype> v(cols.size());
+			for (size_t j = 0; j < cols.size(); ++j) 
+				v[j] = *cols[j]++;
+			if (result.has_value()) data[columns * i + result_index] = function(v);
+			else (void)function(v);
+		}
+		return *this;
+	}
+
+	table &apply_function_n(
+		function_type function, 
+		std::vector<iterator> cols, 
+		std::vector<iterator> sigma_cols, 
+		size_t n, 
+		const std::string &resval, 
+		const std::string &ressigma) 
+	{
+		if (cols.size() != sigma_cols.size()) 
+			throw dimension_error("cols.size() is not equal to sigma_cols.size()");
+		size_t	val_index = index(resval),
+			sgm_index = index(ressigma);
+		for (size_t i = 0; i < n; ++i) {
+			std::vector<dtype> v(cols.size());
+			std::vector<dtype> s(cols.size());
+			for (size_t j = 0; j < cols.size(); ++j) {
+				v[j] = *cols[j]++;
+				s[j] = *sigma_cols[j]++;
+			}
+			data[columns * i + val_index] = function(v);
+			data[columns * i + sgm_index] = sigma(function, v, s);
+		}
+		return *this;
+	}
 	/// adds a column with name `name` and data `column_data`
-	void add_column(std::string name, std::vector<dtype> column_data) {
+	table &add_column(std::string name, std::vector<dtype> column_data) {
 		if (column_data.size() == 0) column_data = std::vector<dtype>(rows, dtype{});
 		std::vector<dtype> data_new(rows * (++columns));
 
@@ -227,15 +265,60 @@ public:
 		}
 		data = std::move(data_new);
 		names.push_back(name);
+		return *this;
 	}
 
-	/// Appends a column to the table. if name is set, appends it to `opt_rownames`
+	/// Deletes a column from a table.
+	table &delete_col(const std::string &colname) {
+		std::vector<dtype> data_new(rows * (--columns));
+		size_t idx = index(colname);
+		for (size_t column = 0; column < names.size(); ++column) {
+			if (column == idx) continue;
+			size_t _col = column - (column > idx);
+			for (size_t row = 0; row < rows; ++row)
+				data_new[row * columns + _col] = data[row * names.size() + column];
+		}
+		data = std::move(data_new);
+		names.erase(names.begin() + idx);
+		return *this;
+	}
+
+	/// Deletes several columns 
+	table &delete_cols(const stringvec &cols) noexcept(false) {
+		size_t columns_new = columns - cols.size();
+		std::vector<dtype> data_new(rows * columns_new);
+		std::set<size_t> idxs;
+		for (const std::string &col : cols)
+			idxs.insert(index(col));
+
+		size_t skipped = 0;
+		for (size_t column = 0; column < columns; ++column) {
+			if (idxs.count(column) != 0) {
+				++skipped;
+				continue;
+			}
+			size_t _col = column - skipped;
+			for (size_t row = 0; row < rows; ++row)
+				data_new[row * columns_new + _col] = data[row * columns + column];
+		}
+		stringvec names_new = stringvec(columns_new);
+		for (size_t i = 0; const std::string &name : names)
+			if (idxs.count(index(name)) == 0) names_new[i++] = name;
+		names = std::move(names_new);
+		data = std::move(data_new);
+		columns = columns_new;
+		return *this;
+	}
+
+
+	/// Appends a row to the table. if name is set, appends it to `opt_rownames`
 	void add_row(std::vector<dtype> values, std::optional<std::string> name = std::nullopt) {
 		if (values.size() == 0) values = std::vector<dtype>(columns, dtype{});
 		data.resize(columns * (++rows));
 		std::copy_n(values.cbegin(), columns, data.end() - columns);
 		if (name.has_value()) opt_rownames.push_back(*name);
 	}
+
 
 	friend std::ostream& operator<<(std::ostream &os, table<dtype> &t) {
 		t.print(os);
@@ -300,6 +383,15 @@ public:
 	void fill_column(const std::string &column, dtype v) {
 		apply([&v](const std::vector<dtype>& _) -> dtype { return v; }, {}, column);
 	}
+	
+	/// UNTESTED!
+	template <typename mult>
+	table &multiply_column(const std::string &column, mult s) {
+		size_t i;
+		for (i = index(column); i < rows * columns; i += columns)
+			data[i] *= s;
+		return *this;
+	}
 
 	/// returns an std::pair with coefficients A and B in that order
 	std::pair<prak::pvalue<dtype>, prak::pvalue<dtype>> 
@@ -331,7 +423,11 @@ public:
 
 	/// calculate standard deviation of the column
 	dtype col_stddev(const std::string &column) {
-		assert(0);
+		dtype accum = dtype{};
+		dtype avg = col_avg(column);
+		for (auto it = begin(column); it != end(column); ++it)
+			accum += (*it - avg)*(*it - avg);
+		return std::sqrt(accum);
 	}
 
 	/// Serialize data in format `data[args[0]][i] data[args[1]][i] data[args[2]][i]...`

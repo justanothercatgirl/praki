@@ -23,7 +23,6 @@ typedef long double	f128;
 #else
 typedef long double	_f64;
 #endif
-
 #if defined(_MSC_VER) || !defined(__cpp_multidimensional_subscript) || __cplusplus < 202110L
 #warning "can not use multidimentional subscript operator: falling back to `operator()`"
 #undef MDSUBSCRIPT
@@ -107,6 +106,11 @@ using vector = std::vector<T, align_alloc<T>>;
 /// prak value / pair value: a value with an error
 template <typename T>
 struct pvalue {	T val, err; };
+
+template <typename T>
+struct pvalue<T> operator*(const struct pvalue<T> &v, T a) {
+	return pvalue<T>{v.val * a, v.err * a};
+}
 
 template <typename T>
 std::ostream &operator<<(std::ostream &os, const struct pvalue<T> &p) {
