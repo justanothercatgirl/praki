@@ -254,7 +254,7 @@ public:
 		return *this;
 	}
 	/// adds a column with name `name` and data `column_data`
-	table &add_column(std::string name, std::vector<dtype> column_data) {
+	table &add_column(const std::string &name, std::vector<dtype> column_data) {
 		if (column_data.size() == 0) column_data = std::vector<dtype>(rows, dtype{});
 		std::vector<dtype> data_new(rows * (++columns));
 
@@ -266,6 +266,9 @@ public:
 		data = std::move(data_new);
 		names.push_back(name);
 		return *this;
+	}
+	table &add_column(const std::string &name, dtype dflt = dtype{}) {
+		return add_column(name, std::vector<dtype>(rows, dflt));
 	}
 
 	/// Deletes a column from a table.
@@ -380,11 +383,18 @@ public:
 	}
 
 	/// Fills a specified column with the same value `v`
-	void fill_column(const std::string &column, dtype v) {
+	table &fill_column(const std::string &column, dtype v) {
 		apply([&v](const std::vector<dtype>& _) -> dtype { return v; }, {}, column);
+		return *this;
+	}
+
+	table &copy_column(const std::string &src, const std::string dest) {
+		size_t si = index(src), di = index(dest);
+		for (size_t i = 0; i < rows; ++i) 
+			data[i*columns + di] = data[i*columns + si];
+		return *this;
 	}
 	
-	/// UNTESTED!
 	template <typename mult>
 	table &multiply_column(const std::string &column, mult s) {
 		size_t i;
@@ -430,6 +440,47 @@ public:
 		return std::sqrt(accum);
 	}
 
+	/// takes columns [columns], calculates average and standard deviation for each row, puts them into `avg` and `stddev` and deleted original columns
+	/// if create_columns is true, creates columns avg and stddev
+	/// This is common thing to do, so might as well write a function for that
+	table& into_avgstddev(const std::vector<std::string> &columns, const std::string &avg_out, const std::string &stddev_out, bool create_columns = false) {
+		if (create_columns) {
+			add_column(avg_out, std::vector<dtype>(rows, dtype{}));
+			add_column(stddev_out, std::vector<dtype>(rows, dtype{}));
+		}
+		apply(avg<dtype>, columns, avg_out);
+		apply(stddev<dtype>, columns, stddev_out);
+		delete_cols(columns);
+		return *this;
+	}
+
+	/// applies a function `func` to arguments in columns `args`, stores the result in column `result` and standard error in column `result_sigma`.
+	/// `sigmas` must be in a 1-to-1 correspondance with `args`
+	table& apply_with_err(function_t<dtype> func, const stringvec &args, const stringvec &sigmas, const std::string &result, const std::string result_sigma) {
+		if (args.size() != sigmas.size()) throw dimension_error("Args and Sigmas did not have the same dimentinons");
+		size_t	result_index = index(result),
+			sigma_index = index(result_sigma);
+		for (size_t i = 0; i < rows; ++i) {
+			std::vector<dtype> __args(args.size()),
+					   __sgms(args.size());
+			for (size_t j = 0; j < args.size(); ++j) { 
+				__args[j] = SUBSCR_OPRTR(args[j], i);
+				__sgms[j] = SUBSCR_OPRTR(sigmas[j], i);
+			}
+			data[columns * i + result_index] = func(__args);
+			data[columns * i + sigma_index] = prak::sigma(func, __args, __sgms);
+		}
+		return *this;
+	}
+
+	size_t find_index(const std::string &column, const dtype &val) {
+		size_t col_idx = index(column); 
+		for (size_t i = 0; i < rows; ++i) {
+			if (data[col_idx + i * columns] == val) return i;
+		}
+		return col_idx;
+	}
+
 	/// Serialize data in format `data[args[0]][i] data[args[1]][i] data[args[2]][i]...`
 	void print_plot(const stringvec &args, std::ostream &out = std::cout) const {
 		std::vector<size_t> offsets(args.size());
@@ -444,8 +495,20 @@ public:
 		}
 	}
 
+	/// Serialize data in format `data[xs][i] data[ys][i] <data[xss][i]> <data>[yss][i]>`, readable by gnuplot with xyerrorbars
+	table &write_plot_4(const std::string &file, const std::string &xs, const std::string &ys, const std::string &xss, const std::string &yss) {
+		std::ofstream out(file);
+		size_t xi = index(xs), yi = index(ys), xsi = index(xss), ysi = index(yss);
+		for (size_t row = 0; row < rows; ++row) {
+			size_t offset = columns * row;
+			out << data[offset + xi]  << ' ' << data[offset + yi]  << ' ' 
+			    << data[offset + xsi] << ' ' << data[offset + ysi] << std::endl;
+		}
+		return *this;
+	}	
+
 	/// Serialize data in format `data[xs][i] data[ys][i] <data[ss][i]>`, readable by gnuplot with yerrorbars
-	void write_plot(const std::string &xs, const std::string &ys, std::optional<std::string> yss = std::nullopt, std::ostream &out = std::cout) const {
+	table &write_plot(const std::string &xs, const std::string &ys, std::optional<std::string> yss = std::nullopt, std::ostream &out = std::cout) {
 		size_t nosigma = std::numeric_limits<size_t>::max();
 		size_t xsi = index(xs), ysi = index(ys), ssi = nosigma;
 		if (yss.has_value()) ssi = index(*yss);
@@ -455,12 +518,13 @@ public:
 			if (ssi != nosigma) out << ' ' << data[offset+ssi];
 			out << std::endl;
 		}
+		return *this;
 	}
 
 	/// Serialize data into a file `file`. For details, refer to documentation for overload with std::ifstream as an argument
-	void write_plot(const std::string &file, const std::string &xs, const std::string &ys, std::optional<std::string> yss = std::nullopt) const {
+	table &write_plot(const std::string &file, const std::string &xs, const std::string &ys, std::optional<std::string> yss = std::nullopt) {
 		std::ofstream out(file);
-		write_plot(xs, ys, yss, out);
+		return write_plot(xs, ys, yss, out);
 	}
 	
 	void plot_png(

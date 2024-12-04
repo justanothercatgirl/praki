@@ -75,6 +75,24 @@ fequal(T x, T y, std::size_t ulps = 1)
     return std::fabs(x - y) <= ulps * std::ldexp(std::numeric_limits<T>::epsilon(), exp);
 }
 
+template<typename T>
+T sum(const std::vector<T> &args) {
+	T res{};
+	for (const T& x : args) res += x;
+	return res;
+}
+
+template<typename T>
+T prod(const std::vector<T> &args) {
+	T res = 1;
+	for (const T& x : args) res *= x;
+	return res;
+}
+
+template <std::floating_point T>
+T hypot(const std::vector<T> &args) {
+	return std::sqrt(args[0]*args[0] + args[1]*args[1]);
+}
 
 /// prints a vector
 template <typename T>
