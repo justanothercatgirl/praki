@@ -9,46 +9,64 @@ table data;
 
 const f64p g = {9.815710602, 0.001};
 
-f64 get(std::string key) { return data[key, 0]; }
-f64 getsqrt(vecarg v) { return std::sqrt(std::abs(get("x4_1") - v[0])); }
-f64 a_A(vecarg a) { return 2/a[0]/a[0]; }
-f64 J_mrga(vecarg a) { return a[0] * a[1] * a[1] * (a[2]/a[3] - 1); }
-f64 ξ_x012(vecarg x) { return (x[1] - x[0]) / (2*x[2] - x[0] - x[1]); }
-f64 Mfr_mgRξ(vecarg a) { return a[0] * a[1] * a[2] * a[3]; }
-f64 J_mrgtx034(vecarg a) { return a[0]*a[1]*a[1]*(a[2]*a[3]*a[3] / 2 / std::pow(std::sqrt(a[4]-a[6]) - std::sqrt(a[4]-a[5]), 2) - 1); }
+f64 get(std::string key) {
+	return data[key, 0];
+}
+
+// [0] = x0
+f64 getsqrt(vecarg v) {
+	return std::sqrt(std::abs(get("x0_1") - v[0]));
+}
+
+f64 a_A(vecarg a) {
+	return 2/a[0]/a[0];
+}
+
+f64 J_mrga(vecarg a) {
+	return a[0] * a[1] * a[1] * (a[2]/a[3] - 1);
+}
+
+f64 ξ_x012(vecarg x) {
+	return (x[1] - x[0]) / (2*x[2] - x[0] - x[1]);
+}
+
+f64 Mfr_mgRξ(vecarg a) {
+	return a[0] * a[1] * a[2] * a[3];
+}
+
+f64 J_mrgtx034(vecarg a) {
+	return a[0]*a[1]*a[1]*(a[2]*a[3]*a[3] / 2 / std::pow(std::sqrt(a[4]-a[6]) - std::sqrt(a[4]-a[5]), 2) - 1);
+}
 
 table ex1(std::string s) {
 	table ret(s);
-	const f64 dx03 = 0.04;
-
-	f64p 	m1 =	{get("m1"), 0.00001},
-	R =	{get("R2"), 0.00005},
-	x2 =	{get("x2_1"), 0.01};
-
-	ret	.add_column("x1", std::vector<f64>(ret.rows, NAN))
+	ret.add_column("x1", std::vector<f64>(ret.rows, NAN))
 		.add_column("t", std::vector<f64>(ret.rows, NAN))
 		.add_column("st", std::vector<f64>(ret.rows, NAN))
 		.add_column("sqrt", std::vector<f64>(ret.rows, NAN))
-		.add_column("x0", std::vector<f64>(ret.rows, NAN))
-		.add_column("ξ", std::vector<f64>(ret.rows, NAN))
-		.apply([dx03](vecarg a){return a[0]+dx03;}, {"x3"}, "x0")
 		.apply(prak::avg<f64>, {"x11", "x12", "x13"}, "x1")
 		.apply(prak::avg<f64>, {"t1", "t2", "t3"}, "t")
 		.apply(prak::stddev<f64>, {"t1", "t2", "t3"}, "st")
-		.apply(getsqrt, {"x0"}, "sqrt")
-		.apply([x2](vecarg a){return (a[0]-a[1])/((x2.val-a[0])+(x2.val-a[1]));}, {"x0", "x1"}, "ξ")
+		.apply(getsqrt, {"x3"}, "sqrt")
 		.delete_cols({"x11", "x12", "x13", "t1", "t2", "t3"});
-
-	f64p x1 = {ret.col_avg("x1"), 0.01 * std::sqrt(ret.rows)};
 	auto [A, B] = ret.least_squares_linear("sqrt", "t", "st", std::nullopt);
+
+	f64p 	m1 =	{get("m1"), 0.00001},
+		R =	{get("R2"), 0.00005},
+		x0 =	{get("x0_1"), 0.01},
+		x1 =	{ret.col_avg("x1"), 0.01 * std::sqrt(ret.rows)},
+		x2 =	{get("x2_1"), 0.01};
+
+	/*std::cout << x0 << '\n' << x1 << '\n' << x2 << '\n';*/
 	f64p a = prak::function<f64>(a_A, {A});
 	f64p J = prak::function<f64>(J_mrga, {m1, R, g, a});
-	f64p ξ = {ret.col_avg("ξ"), ret.col_stddev("ξ")};
+	f64p ξ = prak::function<f64>(ξ_x012, {x0, x1, x2});
 	f64p Mfr = prak::function<f64>(Mfr_mgRξ, {m1, g, R, ξ});
-	ret.write_plot("mnk.plot", "sqrt", "t", "st");
-	std::cout << ret  << "\nA = " << A << "\nB = " << B
-		  << "\na = " << a    << "\nJ = " << J
-		  << "\nξ = " << ξ    << "\nМомент трения Mfr = " << Mfr 
+	std::cout << ret 
+		  << "\na = " << a
+		  << "\nJ = " << J
+		  << "\nξ = " << ξ
+		  << "\nМомент трения Mfr = " << Mfr 
 		  << std::endl;
 	return ret;
 }
@@ -73,11 +91,12 @@ void ex2(std::string data) {
 		.delete_cols({"t1", "t2", "t3"})
 		;
 	for (size_t i = 0; i < table.rows; ++i) {
+		/* mrgtx034 */
 		std::vector<f64p> args = {
 			table["M", i] == 0 ? m0 : m1, 
 			table["R", i] == 0 ? R0 : R1,
 			g, {table["t", i], table["st", i]},
-			// я пр**бался и только на первом измерении у меня x4 = 4см, на остальных 10см
+			// я проебался и только на первом измерении у меня x4 = 4см, на остальных 10см
 			x0, x3, table["M", i] == 0 && table["R", i] == 0 ? f64p{0.04, 0.01} : x4,
 		};
 		auto [val, err] = prak::function<f64>(J_mrgtx034, args);
